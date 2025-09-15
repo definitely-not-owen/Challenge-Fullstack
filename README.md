@@ -83,7 +83,7 @@ pip install biomcp pandas openai  # or whatever you need
 ## Submission Instructions
 
 1. **Complete your solution** in a private GitHub repo
-2. **Add `bryan` as a collaborator**
+2. **Add bryan as a collaborator**
 3. **Include a brief README** explaining:
    - How to run your solution
    - Your approach and key decisions
