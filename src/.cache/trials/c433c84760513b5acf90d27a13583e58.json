@@ -1,0 +1,140 @@
+[
+  {
+    "nct_id": "NCT04756765",
+    "title": "Pembrolizumab Plus Chemotherapy in HER2-Negative Breast Cancer",
+    "brief_summary": "A study of pembrolizumab plus chemotherapy versus placebo plus chemotherapy for previously untreated locally recurrent inoperable or metastatic triple-negative breast cancer.",
+    "conditions": [
+      "Breast Cancer"
+    ],
+    "phase": "Phase 3",
+    "status": "Recruiting",
+    "eligibility": {
+      "min_age": 18,
+      "max_age": 75,
+      "gender": "All",
+      "inclusion_criteria": [
+        "Confirmed diagnosis of Breast Cancer",
+        "Stage II",
+        "Adequate organ function"
+      ],
+      "exclusion_criteria": [
+        "Prior systemic therapy for metastatic disease",
+        "Active CNS metastases"
+      ],
+      "required_biomarkers": [
+        "ER+",
+        "HER2+"
+      ],
+      "excluded_biomarkers": []
+    },
+    "locations": [
+      {
+        "city": "Boston",
+        "state": "MA",
+        "country": "USA"
+      },
+      {
+        "city": "New York",
+        "state": "NY",
+        "country": "USA"
+      }
+    ],
+    "sponsor": "National Cancer Institute",
+    "enrollment": 200,
+    "interventions": [
+      "Pembrolizumab"
+    ]
+  },
+  {
+    "nct_id": "NCT05633979",
+    "title": "Trastuzumab Deruxtecan in HER2+ Metastatic Breast Cancer",
+    "brief_summary": "An open-label study of trastuzumab deruxtecan in participants with HER2-positive metastatic breast cancer.",
+    "conditions": [
+      "Breast Cancer"
+    ],
+    "phase": "Phase 2",
+    "status": "Recruiting",
+    "eligibility": {
+      "min_age": 18,
+      "max_age": 75,
+      "gender": "All",
+      "inclusion_criteria": [
+        "Confirmed diagnosis of Breast Cancer",
+        "Stage II",
+        "Adequate organ function"
+      ],
+      "exclusion_criteria": [
+        "Prior systemic therapy for metastatic disease",
+        "Active CNS metastases"
+      ],
+      "required_biomarkers": [
+        "ER+",
+        "HER2+"
+      ],
+      "excluded_biomarkers": []
+    },
+    "locations": [
+      {
+        "city": "Boston",
+        "state": "MA",
+        "country": "USA"
+      },
+      {
+        "city": "New York",
+        "state": "NY",
+        "country": "USA"
+      }
+    ],
+    "sponsor": "National Cancer Institute",
+    "enrollment": 200,
+    "interventions": [
+      "Trastuzumab"
+    ]
+  },
+  {
+    "nct_id": "NCT04873362",
+    "title": "CDK4/6 Inhibitor With Endocrine Therapy",
+    "brief_summary": "A study evaluating the efficacy and safety of ribociclib plus endocrine therapy in HR+/HER2- advanced breast cancer.",
+    "conditions": [
+      "Breast Cancer"
+    ],
+    "phase": "Phase 3",
+    "status": "Recruiting",
+    "eligibility": {
+      "min_age": 18,
+      "max_age": 75,
+      "gender": "All",
+      "inclusion_criteria": [
+        "Confirmed diagnosis of Breast Cancer",
+        "Stage II",
+        "Adequate organ function"
+      ],
+      "exclusion_criteria": [
+        "Prior systemic therapy for metastatic disease",
+        "Active CNS metastases"
+      ],
+      "required_biomarkers": [
+        "ER+",
+        "HER2+"
+      ],
+      "excluded_biomarkers": []
+    },
+    "locations": [
+      {
+        "city": "Boston",
+        "state": "MA",
+        "country": "USA"
+      },
+      {
+        "city": "New York",
+        "state": "NY",
+        "country": "USA"
+      }
+    ],
+    "sponsor": "National Cancer Institute",
+    "enrollment": 200,
+    "interventions": [
+      "CDK4/6"
+    ]
+  }
+]
