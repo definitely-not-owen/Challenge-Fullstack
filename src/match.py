@@ -17,6 +17,10 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime
 
 import pandas as pd
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent))

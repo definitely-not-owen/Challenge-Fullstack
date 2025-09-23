@@ -234,9 +234,8 @@ class BioMCPClient:
         """
         logger.info(f"Searching trials for '{condition}' using {self.mode} mode")
         
-        if self.mode == "mcp":
-            return await self.search_trials_mcp(condition, additional_terms, max_results)
-        elif self.mode == "sdk":
+        # Always use SDK mode
+        if self.mode == "sdk" or self.mode == "auto":
             return await self.search_trials_sdk(condition, additional_terms, max_results)
         else:
             return await self._get_mock_trials(condition, additional_terms, max_results)
