@@ -91,38 +91,56 @@ class PatientProcessor:
 - **Stage Mapping**: Map cancer stages to standard terminology
 - **Demographic Processing**: Normalize age, gender, race data
 
-### 3. LLM Ranker (`src/ranker.py`)
+### 3. Hybrid LLM Ranker (`src/ranker.py`)
 
-**Objective**: Use LLM to intelligently rank trials for each patient
+**Objective**: Hybrid deterministic + LLM approach for intelligent trial ranking
 
 **Technical Implementation**:
 ```python
-class LLMTrialRanker:
-    def __init__(self, openai_api_key: str):
-        self.client = OpenAI(api_key=openai_api_key)
-        self.scoring_prompt = self._load_scoring_prompt()
+class HybridTrialRanker:
+    def __init__(self, llm_config: dict):
+        self.deterministic_filter = DeterministicFilter()
+        self.llm_ranker = LLMRanker(llm_config)
+        self.mixture_of_experts = MixtureOfExperts()
     
     async def rank_trials(self, patient: Patient, trials: List[Trial]) -> List[RankedTrial]:
-        """Rank trials using LLM with structured scoring"""
+        """Hybrid ranking: deterministic filters + LLM scoring"""
+        # Step 1: Apply deterministic filters
+        filtered_trials = self.deterministic_filter.apply(patient, trials)
         
-    def _create_scoring_prompt(self, patient: Patient, trials: List[Trial]) -> str:
-        """Create structured prompt for LLM scoring"""
+        # Step 2: LLM scoring with multiple experts
+        scored_trials = await self.mixture_of_experts.score(patient, filtered_trials)
         
-    def _parse_llm_response(self, response: str) -> List[RankedTrial]:
-        """Parse LLM response into structured format"""
+        # Step 3: Sort and return
+        return sorted(scored_trials, key=lambda x: x.total_score, reverse=True)
 ```
 
-**Scoring Criteria** (Weighted):
-1. **Eligibility Match** (40%): Age, gender, cancer type, stage
-2. **Biomarker Alignment** (30%): Biomarker compatibility
-3. **Geographic Proximity** (15%): Location-based scoring
-4. **Clinical Appropriateness** (15%): Treatment intent, comorbidities
+**Hybrid Scoring System** (100 points):
+1. **Eligibility Match** (40 pts)
+   - Deterministic: Age, gender, trial status (20 pts)
+   - LLM-assisted: Performance status, nuanced criteria (20 pts)
 
-**Prompt Engineering Strategy**:
-- **Structured Prompts**: Use JSON schema for consistent responses
-- **Clinical Context**: Include relevant clinical guidelines
-- **Few-shot Examples**: Provide examples of good matches
-- **Confidence Scoring**: Request confidence levels for rankings
+2. **Biomarker Alignment** (30 pts)
+   - Deterministic: Hard exclusions (10 pts)
+   - LLM-assisted: Exploratory vs mandatory markers (20 pts)
+
+3. **Clinical Appropriateness** (20 pts)
+   - LLM-assisted: Phase vs stage, prior therapy logic
+
+4. **Practical Factors** (10 pts)
+   - Deterministic: Geography, trial open/closed (5 pts)
+   - LLM-assisted: Feasibility nuances (5 pts)
+
+**Mixture-of-Experts Strategy**:
+- **Medical Expert**: Eligibility nuance
+- **Biomarker Specialist**: Molecular matching
+- **Patient Advocate**: Quality of life/practicality
+- **LLM Judge**: Meta-model consolidation (Gemini 2.5 Pro)
+
+**Latest Frontier Models**:
+- GPT-5 / Claude 4.1 Sonnet / Gemini 2.5 Flash for scoring
+- Parallel API calls for speed
+- Result consolidation via judge model
 
 ### 4. Evaluation Suite (`tests/eval.py`)
 
@@ -156,7 +174,7 @@ class EvaluationSuite:
 **Evaluation Approaches**:
 
 1. **LLM-as-Judge** (Primary):
-   - Use GPT-4 to evaluate match quality
+   - Use GPT-5 to evaluate match quality
    - Generate synthetic ground truth rankings
    - Compare against expert clinical reasoning
 
@@ -256,13 +274,15 @@ class Trial:
 @dataclass
 class RankedTrial:
     trial: Trial
-    score: float
+    total_score: float
+    subscores: Dict[str, float]  # eligibility, biomarker, clinical, practical
     confidence: float
-    match_reasons: List[str]
-    eligibility_score: float
-    biomarker_score: float
-    geographic_score: float
-    clinical_score: float
+    reasoning: str
+    key_matches: List[str]
+    concerns: List[str]
+    deterministic_filters_applied: Dict[str, bool]  # age_ok, gender_ok, trial_open, geography_ok
+    expert_scores: Dict[str, float]  # medical_expert, biomarker_specialist, patient_advocate
+    judge_consolidation: str  # Meta-model reasoning
 ```
 
 ## Implementation Timeline
@@ -325,12 +345,14 @@ python tests/eval.py
 
 ## Key Technical Decisions
 
-1. **BioMCP Integration**: Required for trial fetching, with fallback to ClinicalTrials.gov
-2. **Async Architecture**: Use asyncio for concurrent API calls
-3. **Structured Prompts**: JSON schema for consistent LLM responses
-4. **Caching Strategy**: Cache trial data to reduce API calls
-5. **Evaluation Focus**: LLM-as-judge for rapid evaluation setup
-6. **Error Handling**: Graceful degradation with fallback options
+1. **Hybrid Approach**: Deterministic filters + LLM scoring for safety and quality
+2. **Latest Frontier Models**: GPT-5, Claude 4.1 Sonnet, Gemini 2.5 Flash
+3. **Mixture-of-Experts**: Multiple expert prompts with judge consolidation
+4. **Deterministic Pre-filtering**: Remove obvious mismatches before LLM
+5. **Transparency**: Log all deterministic filter decisions
+6. **Parallel Processing**: Concurrent API calls to multiple models
+7. **Caching Strategy**: Cache both deterministic and LLM results
+8. **Error Handling**: Graceful degradation with fallback scoring
 
 ## Success Metrics
 
