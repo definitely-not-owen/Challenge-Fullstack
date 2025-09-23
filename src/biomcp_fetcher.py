@@ -15,6 +15,8 @@ from typing import List, Optional, Dict, Any, Union
 from enum import Enum
 from pathlib import Path
 
+import pandas as pd
+
 # BioMCP imports
 try:
     from mcp import ClientSession, StdioServerParameters
@@ -412,8 +414,18 @@ class TrialMatcher:
         # Extract patient information
         cancer_type = patient_data.get('cancer_type', '')
         stage = patient_data.get('cancer_stage', '')
-        biomarkers_detected = patient_data.get('biomarkers_detected', '').split(', ')
-        biomarkers_ruled_out = patient_data.get('biomarkers_ruled_out', '').split(', ')
+        
+        # Handle NaN values and empty strings for biomarkers
+        biomarkers_detected_str = patient_data.get('biomarkers_detected', '')
+        biomarkers_ruled_out_str = patient_data.get('biomarkers_ruled_out', '')
+        
+        biomarkers_detected = []
+        if pd.notna(biomarkers_detected_str) and biomarkers_detected_str.strip():
+            biomarkers_detected = [b.strip() for b in str(biomarkers_detected_str).split(',') if b.strip()]
+        
+        biomarkers_ruled_out = []
+        if pd.notna(biomarkers_ruled_out_str) and biomarkers_ruled_out_str.strip():
+            biomarkers_ruled_out = [b.strip() for b in str(biomarkers_ruled_out_str).split(',') if b.strip()]
         
         # Build search terms
         additional_terms = []
