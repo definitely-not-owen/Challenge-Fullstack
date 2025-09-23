@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+import time
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -48,7 +49,7 @@ class HybridClinicalTrialMatcher:
     def __init__(
         self,
         biomcp_mode: str = "auto",
-        use_mixture_of_experts: bool = True,
+        use_mixture_of_experts: bool = False,  # OFF by default for speed
         verbose: bool = False
     ):
         """
@@ -56,7 +57,7 @@ class HybridClinicalTrialMatcher:
         
         Args:
             biomcp_mode: BioMCP client mode ("sdk", "mcp", or "auto")
-            use_mixture_of_experts: Whether to use multiple LLM experts
+            use_mixture_of_experts: Whether to use multiple LLM experts (slower but more thorough)
             verbose: Enable verbose logging
         """
         # Initialize components
@@ -171,6 +172,8 @@ class HybridClinicalTrialMatcher:
         
         # Step 1: Fetch trials from BioMCP
         logger.info("\n📡 Fetching trials from BioMCP...")
+        start_fetch = time.time()
+        
         async with self.biomcp_client as client:
             # Build search terms
             search_terms = []
@@ -183,18 +186,20 @@ class HybridClinicalTrialMatcher:
                 normalized_markers = BiomarkerMatcher.extract_biomarkers(str(biomarkers))
                 search_terms.extend(normalized_markers)
             
-            # Search for trials
+            # Search for trials - reduce to max 10 for speed
             trials = await client.search_trials(
                 condition=patient['cancer_type'],
                 additional_terms=search_terms,
-                max_results=max_trials * 3  # Get extra for filtering
+                max_results=min(10, max_trials * 2)  # Limit to 10 trials max
             )
+        
+        fetch_time = time.time() - start_fetch
         
         if not trials:
             logger.warning("No trials found from BioMCP")
             return []
         
-        logger.info(f"  ✓ Retrieved {len(trials)} trials")
+        logger.info(f"  ✓ Retrieved {len(trials)} trials in {fetch_time:.1f}s")
         
         # Step 2: Apply hybrid ranking
         logger.info("\n🤖 Applying hybrid ranking...")
@@ -307,7 +312,7 @@ Examples:
   python src/match.py --patient_id 1
   python src/match.py --patient_id 2 --max_trials 5
   python src/match.py --patient_id 3 --cancer_type "Breast" --verbose
-  python src/match.py --patient_id 4 --no-experts  # Disable mixture of experts
+  python src/match.py --patient_id 4 --use-experts  # Enable mixture of experts
         """
     )
     
@@ -337,9 +342,9 @@ Examples:
     )
     
     parser.add_argument(
-        '--no-experts',
+        '--use-experts',
         action='store_true',
-        help='Disable mixture of experts (use single LLM)'
+        help='Enable mixture of experts (slower but more thorough)'
     )
     
     parser.add_argument(
@@ -361,7 +366,7 @@ Examples:
         # Initialize hybrid matcher
         matcher = HybridClinicalTrialMatcher(
             biomcp_mode=args.mode,
-            use_mixture_of_experts=not args.no_experts,
+            use_mixture_of_experts=args.use_experts,  # OFF by default
             verbose=args.verbose
         )
         
@@ -409,7 +414,7 @@ Examples:
             print(json.dumps({
                 'patient_id': args.patient_id,
                 'total_trials': len(ranked_trials),
-                'mixture_of_experts': not args.no_experts,
+                'mixture_of_experts': args.use_experts,
                 'trials': trials_data
             }, indent=2))
             

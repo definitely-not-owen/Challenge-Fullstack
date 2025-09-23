@@ -112,7 +112,7 @@ class LLMClient:
                     messages.append({"role": "user", "content": prompt})
                     
                     response = await self.client.chat.completions.create(
-                        model="gpt-5",
+                        model="gpt-4o-mini",  # Use gpt-4o-mini for speed and cost
                         messages=messages,
                         temperature=temperature,
                         response_format={"type": "json_object"}
