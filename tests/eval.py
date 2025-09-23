@@ -12,6 +12,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from dataclasses import dataclass
 from typing import List, Dict, Optional
+import time
 
 # Load environment variables from .env file
 load_dotenv()
@@ -116,6 +117,7 @@ async def main():
     """Run the minimal evaluation suite."""
     from src.match import HybridClinicalTrialMatcher
     
+    start_time = time.time()
     logger.info("Starting evaluation...")
     
     # Initialize matcher with SDK mode (no MCP)
@@ -139,7 +141,12 @@ async def main():
     
     # Test ALL patients
     num_patients = len(patients_df)  # Test all 30 patients
-    for patient_id in range(1, num_patients + 1):
+    
+    # Process patients in parallel batches
+    BATCH_SIZE = 10  # Process 10 patients at a time
+    
+    async def evaluate_patient(patient_id):
+        """Evaluate a single patient asynchronously."""
         logger.info(f"Evaluating patient {patient_id}/{num_patients}...")
         
         # Get patient data for oracles
@@ -156,12 +163,12 @@ async def main():
         try:
             ranked = await matcher.match_patient_trials(str(patient_id), max_trials=5)
         except Exception as e:
-            logger.error(f"Failed to match patient: {e}")
+            logger.error(f"Failed to match patient {patient_id}: {e}")
             # Use mock trials for testing if real trials fail
             ranked = create_mock_trials(patient)
         
         if not ranked:
-            logger.warning("No trials found, using mock data")
+            logger.warning(f"No trials found for patient {patient_id}, using mock data")
             ranked = create_mock_trials(patient)
         
         # Evaluate
@@ -179,13 +186,35 @@ async def main():
                 td = vars(r.trial)
             trial_dicts.append(td)
         
+        # Run evaluations in parallel
+        judge_task = judge.evaluate(patient, trial_dict)
+        behavioral_task = behavioral.run_all_tests(patient_id)
+        
+        judge_result, behavioral_result = await asyncio.gather(
+            judge_task,
+            behavioral_task
+        )
+        
         patient_results = {
-            'judge': await judge.evaluate(patient, trial_dict),
+            'judge': judge_result,
             'oracle': oracles.calculate_metrics(patient, trial_dicts),
-            'behavioral': await behavioral.run_all_tests(patient_id)
+            'behavioral': behavioral_result
         }
         
-        all_results.append(patient_results)
+        return patient_results
+    
+    # Process patients in batches
+    for batch_start in range(1, num_patients + 1, BATCH_SIZE):
+        batch_end = min(batch_start + BATCH_SIZE, num_patients + 1)
+        batch_ids = list(range(batch_start, batch_end))
+        
+        logger.info(f"Processing batch: patients {batch_start} to {batch_end - 1}")
+        
+        # Run batch in parallel
+        batch_tasks = [evaluate_patient(pid) for pid in batch_ids]
+        batch_results = await asyncio.gather(*batch_tasks)
+        
+        all_results.extend(batch_results)
     
     # Calculate metrics
     final_metrics = metrics.calculate_all(all_results[0] if all_results else {}, all_results)
@@ -193,9 +222,13 @@ async def main():
     # Generate report
     report = reporter.generate(final_metrics, [])
     
+    elapsed_time = time.time() - start_time
+    
     print("\n" + "="*60)
     print(report)
     print("="*60)
+    print(f"\n⏱️  Evaluation completed in {elapsed_time:.1f} seconds")
+    print(f"   ({elapsed_time/num_patients:.1f} seconds per patient average)")
     
     return final_metrics
 

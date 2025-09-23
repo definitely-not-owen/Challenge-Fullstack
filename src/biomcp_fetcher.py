@@ -88,15 +88,16 @@ class BioMCPClient:
             nci_api_key: NCI API key for enhanced features (uses env var if not provided)
         """
         self.mode = mode
-        self.nci_api_key = nci_api_key or os.getenv('NCI_API_KEY')
+        # Clean up API key (remove quotes and spaces from .env format)
+        api_key = nci_api_key or os.getenv('NCI_API_KEY', '')
+        self.nci_api_key = api_key.strip().strip("'\"") if api_key else None
         self.mcp_session: Optional[ClientSession] = None
         self.http_client: Optional[httpx.AsyncClient] = None
+        self._search_cache = {}  # Cache for search results
         
         # Auto-detect best available mode
         if mode == "auto":
-            if MCP_AVAILABLE:
-                self.mode = "mcp"
-            elif HTTPX_AVAILABLE:
+            if HTTPX_AVAILABLE:
                 self.mode = "sdk"
             else:
                 self.mode = "mock"
@@ -127,37 +128,75 @@ class BioMCPClient:
         max_results: int = 20
     ) -> List[ClinicalTrial]:
         """
-        Search trials using SDK-style HTTP API.
+        Search trials using NCI CTS API.
         
-        This method makes direct HTTP calls to BioMCP endpoints.
+        This method makes direct HTTP calls to the National Cancer Institute's Clinical Trials Search API.
         """
+        # Check cache first
+        cache_key = f"{condition}_{additional_terms}_{max_results}"
+        if cache_key in self._search_cache:
+            logger.debug(f"Cache hit for: {cache_key}")
+            return self._search_cache[cache_key]
+        
         if not HTTPX_AVAILABLE or not self.http_client:
             return await self._get_mock_trials(condition, additional_terms, max_results)
         
+        if not self.nci_api_key:
+            logger.warning("NCI_API_KEY not set, using mock data")
+            return await self._get_mock_trials(condition, additional_terms, max_results)
+        
         try:
-            # Build search query
-            search_terms = [condition]
-            if additional_terms:
-                search_terms.extend(additional_terms)
-            query = " ".join(search_terms)
+            # Build search parameters
+            # Use keyword parameter for general search
+            params = {
+                "keyword": condition,
+                "size": str(max_results)
+            }
             
-            # Make HTTP request to BioMCP endpoint
-            # Note: Using actual BioMCP HTTP endpoint structure
-            response = await self.http_client.post(
-                "http://localhost:5173/search",  # Default BioMCP HTTP server
-                json={
-                    "domain": "trial",
-                    "query": query,
-                    "page": 1,
-                    "page_size": max_results
-                }
+            # Add additional search terms to keyword
+            if additional_terms:
+                # Combine all search terms into the keyword field
+                # NCI API searches better when biomarkers are included in keyword
+                all_terms = [condition] + additional_terms
+                params["keyword"] = " ".join(all_terms)
+            
+            # Make HTTP request to NCI CTS API
+            headers = {
+                "X-API-KEY": self.nci_api_key,
+                "Accept": "application/json",
+                "Accept-Encoding": "gzip"
+            }
+            
+            url = "https://clinicaltrialsapi.cancer.gov/api/v2/trials"
+            logger.info(f"Making request to {url} with params: {params}")
+            
+            response = await self.http_client.get(
+                url,
+                params=params,
+                headers=headers,
+                timeout=30.0
             )
             
             if response.status_code == 200:
                 data = response.json()
-                return self._parse_trials(data)
+                trial_count = len(data.get('data', data.get('trials', [])))
+                logger.info(f"API returned {trial_count} trials")
+                logger.debug(f"Response data keys: {list(data.keys())}")
+                if 'total' in data:
+                    logger.info(f"Total available trials: {data['total']}")
+                
+                # Parse and cache results
+                trials = self._parse_nci_trials(data)
+                self._search_cache[cache_key] = trials
+                return trials
+            elif response.status_code == 401:
+                logger.error("Invalid or missing API key")
+                return await self._get_mock_trials(condition, additional_terms, max_results)
+            elif response.status_code == 429:
+                logger.error("Rate limit exceeded")
+                return await self._get_mock_trials(condition, additional_terms, max_results)
             else:
-                logger.error(f"HTTP request failed: {response.status_code}")
+                logger.error(f"HTTP request failed: {response.status_code} - {response.text[:200]}")
                 return await self._get_mock_trials(condition, additional_terms, max_results)
                 
         except Exception as e:
@@ -230,7 +269,7 @@ class BioMCPClient:
         """
         Unified search interface that uses the configured mode.
         
-        Automatically selects SDK or MCP based on initialization.
+        Automatically selects SDK or mock based on initialization.
         """
         logger.info(f"Searching trials for '{condition}' using {self.mode} mode")
         
@@ -239,6 +278,93 @@ class BioMCPClient:
             return await self.search_trials_sdk(condition, additional_terms, max_results)
         else:
             return await self._get_mock_trials(condition, additional_terms, max_results)
+    
+    def _parse_nci_trials(self, data: Dict[str, Any]) -> List[ClinicalTrial]:
+        """Parse trials from NCI CTS API response."""
+        trials = []
+        
+        # NCI API returns trials in 'data' field
+        trial_list = data.get('data', data.get('trials', []))
+        
+        for item in trial_list:
+            # Extract disease/condition names
+            conditions = []
+            for disease in item.get('diseases', []):
+                if isinstance(disease, dict):
+                    conditions.append(disease.get('name', ''))
+                else:
+                    conditions.append(str(disease))
+            
+            # Extract interventions from arms
+            interventions = []
+            for arm in item.get('arms', []):
+                for intervention in arm.get('interventions', []):
+                    if isinstance(intervention, dict):
+                        interventions.append(intervention.get('name', ''))
+                    else:
+                        interventions.append(str(intervention))
+            
+            # Extract locations from sites
+            locations = []
+            for site in item.get('sites', []):
+                location = {}
+                if isinstance(site, dict):
+                    org = site.get('org', {})
+                    if isinstance(org, dict):
+                        location['name'] = org.get('name', '')
+                        location['city'] = org.get('city', '')
+                        location['state'] = org.get('state_or_province', '')
+                        location['country'] = org.get('country', '')
+                        locations.append(location)
+            
+            # Extract eligibility criteria
+            eligibility = item.get('eligibility', {})
+            eligibility_text = eligibility.get('unstructured', [])
+            if isinstance(eligibility_text, list):
+                # Extract description from structured eligibility items
+                descriptions = []
+                for criteria in eligibility_text:
+                    if isinstance(criteria, dict) and 'description' in criteria:
+                        descriptions.append(criteria['description'])
+                eligibility_text = ' '.join(descriptions) if descriptions else ''
+            
+            # Extract age from structured eligibility
+            structured = eligibility.get('structured', {})
+            min_age = structured.get('min_age')
+            max_age = structured.get('max_age')
+            gender = structured.get('gender', 'All')
+            
+            # Convert age strings to integers if possible
+            if min_age and isinstance(min_age, str):
+                try:
+                    min_age = int(min_age.split()[0]) if ' ' in min_age else int(min_age)
+                except:
+                    min_age = None
+            if max_age and isinstance(max_age, str):
+                try:
+                    max_age = int(max_age.split()[0]) if ' ' in max_age else int(max_age)
+                except:
+                    max_age = None
+            
+            trial = ClinicalTrial(
+                nct_id=item.get('nct_id', ''),
+                title=item.get('brief_title', item.get('official_title', '')),
+                brief_summary=item.get('brief_summary', ''),
+                conditions=conditions,
+                phase=item.get('phase', 'N/A'),
+                status=item.get('current_trial_status', ''),
+                eligibility_criteria=eligibility_text,
+                min_age=min_age,
+                max_age=max_age,
+                gender=gender,
+                locations=locations,
+                interventions=list(set(interventions)),  # Remove duplicates
+                sponsor=item.get('lead_sponsor_name', ''),
+                enrollment=item.get('enrollment')
+            )
+            trials.append(trial)
+        
+        return trials
     
     def _parse_trials(self, data: Dict[str, Any]) -> List[ClinicalTrial]:
         """Parse trials from SDK/HTTP response."""
