@@ -1,16 +1,16 @@
 # Clinical Trial Matching System
 
-Clinical trial matching system that uses BioMCP for trial discovery and LLM-powered ranking to match patients with relevant clinical trials.
+A clinical trial matching system that uses BioMCP for trial discovery and LLM-powered ranking to match patients with relevant clinical trials.
 
-## 🎯 Overview
+## Overview
 
-This system addresses the critical challenge of matching cancer patients with appropriate clinical trials using a **hybrid approach**:
+I built this system to address the challenge of matching cancer patients with appropriate clinical trials using a hybrid approach:
 
 1. **BioMCP Integration**: Fetches real clinical trials via SDK/MCP protocols
 2. **Hybrid Ranking**: Combines deterministic filters with mixture-of-experts LLM scoring
 3. **Production-Ready**: Pydantic validation, enhanced filters, and transparent scoring
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
@@ -18,9 +18,10 @@ This system addresses the critical challenge of matching cancer patients with ap
 - NCI API key for BioMCP access (optional, uses mock data without)
 - OpenAI or Gemini API key for LLM ranking (optional, uses mock scoring without)
 
-### Current Status
+### Current Implementation
 
-✅ **Fully Implemented Features:**
+I've implemented the following features:
+
 - **Hybrid Ranking System**: Deterministic filters + LLM scoring
 - **Mixture-of-Experts**: Multiple LLM perspectives with judge consolidation
 - **BioMCP Integration**: SDK and MCP protocol support
@@ -29,7 +30,7 @@ This system addresses the critical challenge of matching cancer patients with ap
 - **Transparent Scoring**: 100-point scale with subscore breakdown
 - **Multiple Output Formats**: Text, JSON, and detailed reasoning
 
-🚀 **Key Improvements:**
+Key improvements I made:
 - Deterministic pre-filtering reduces LLM costs by 60%+
 - Biomarker patterns recognize 12+ marker types with synonyms
 - Geographic distance calculation using Haversine formula
@@ -62,7 +63,7 @@ export GEMINI_API_KEY="your-gemini-api-key"
 export CLAUDE_API_KEY="your-claude-api-key"
 ```
 
-**Note:** System uses mock data when API keys are not configured. With keys, you get real trials and LLM ranking.
+Note: The system uses mock data when API keys are not configured. With keys, you get real trials and LLM ranking.
 
 3. **Run the system:**
 ```bash
@@ -85,7 +86,7 @@ python src/match.py --patient_id 5 --output detailed
 python tests/eval.py
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 Challenge-Fullstack/
@@ -98,14 +99,17 @@ Challenge-Fullstack/
 │   └── validators.py             # Pydantic output validation
 ├── tests/
 │   ├── eval.py                   # Evaluation suite
-│   └── test_*.py                 # Test files
+│   ├── anchor_free_judge.py      # LLM-as-judge evaluation
+│   ├── behavioral_tests.py       # Behavioral testing
+│   ├── deterministic_oracles.py  # Deterministic validation
+│   ├── metrics_calculator.py     # Metrics calculation
+│   └── report_generator.py       # Report generation
 ├── patients.csv                  # Patient data (30 patients)
 ├── requirements.txt              # All dependencies
-├── implementation_plan.md        # Technical architecture
 └── README.md                     # This file
 ```
 
-## 🔧 Usage
+## Usage
 
 ### Basic Patient Matching
 
@@ -148,7 +152,7 @@ trials = await matcher.match_patient(patient, max_trials=5)
 
 ### BioMCP Integration Modes
 
-The system supports multiple BioMCP integration approaches:
+I implemented support for multiple BioMCP integration approaches:
 
 #### 1. SDK Mode (HTTP API)
 ```python
@@ -178,9 +182,9 @@ async with BioMCPClient(mode="mcp") as client:
 matcher = TrialMatcher(mode="auto")
 ```
 
-## 🧪 Evaluation Suite
+## Evaluation Suite
 
-The evaluation system uses multiple approaches to validate matching quality:
+I built an evaluation system that uses multiple approaches to validate matching quality:
 
 ### Running Evaluations
 
@@ -196,14 +200,14 @@ python tests/eval.py --eval_type clinical_logic
 
 ### Evaluation Methods
 
-1. **LLM-as-Judge**: Uses GPT-5 or Gemini 2.5 Pro to evaluate match quality
+1. **LLM-as-Judge**: Uses GPT-5 or Gemini to evaluate match quality
 2. **Biomarker Validation**: Checks molecular compatibility
 3. **Clinical Logic Testing**: Validates stage-appropriate selection
-4. **Synthetic Data Generation**: Creates edge cases for testing
+4. **Behavioral Tests**: Edge case and consistency testing
 
-## 📊 Patient Data
+## Patient Data
 
-The system includes 30 real patient records with:
+The system includes 30 patient records with:
 
 - **Demographics**: Age, gender, race, location, BMI
 - **Cancer Details**: Type, stage, grade, biomarkers
@@ -218,12 +222,13 @@ The system includes 30 real patient records with:
 - Ovarian Cancer (2 patients)
 - Prostate Cancer (1 patient)
 - Colorectal Cancer (1 patient)
+- Gastroesophageal Cancer (1 patient)
 
-## 🔍 Key Features
+## Key Features
 
 ### Hybrid Ranking System
-- **Deterministic Pre-filtering**: Remove obvious mismatches before LLM
-- **Mixture-of-Experts**: Three specialized LLM perspectives
+- **Deterministic Pre-filtering**: I remove obvious mismatches before LLM processing
+- **Mixture-of-Experts**: Three specialized LLM perspectives I implemented:
   - Medical Expert: Clinical eligibility assessment
   - Biomarker Specialist: Molecular matching expertise
   - Patient Advocate: Quality of life and practicality
@@ -242,16 +247,18 @@ The system includes 30 real patient records with:
 - **Error Recovery**: Graceful fallbacks and default values
 - **Response Caching**: 24-hour cache reduces API calls
 
-## ⚙️ Configuration
+## Configuration
 
 ### Environment Variables
 
 ```bash
-# Required
+# Required for real trial data
 NCI_API_KEY="your-nci-api-key"           # BioMCP access
 
-# Optional
+# Optional for LLM ranking
 OPENAI_API_KEY="your-openai-api-key"     # LLM ranking
+CLAUDE_API_KEY="your-claude-key"
+GEMINI_API_KEY="your-gemini-key"
 BIOMCP_MODE="auto"                       # SDK, mcp, or auto
 CACHE_DURATION="24"                      # Hours
 ```
@@ -264,7 +271,7 @@ CACHE_DURATION="24"                      # Hours
 | ClinicalTrials.gov | 50 req/min | 50 req/min |
 | OpenAI | N/A | Based on tier |
 
-## 🚨 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -281,24 +288,15 @@ CACHE_DURATION="24"                      # Hours
    - Set NCI_API_KEY to get real trials
    - Check network connectivity
 
-4. **"MCP connection failed"**
-   - This is expected without BioMCP server running
-   - System will fallback to mock data
-   - Set NCI_API_KEY for real API access
-
-5. **"float object has no attribute 'split'"**
-   - Fixed in latest version
-   - Update to latest code if you see this error
-
 ### Debug Mode
 
 ```bash
 # Enable detailed logging
 export LOG_LEVEL=DEBUG
-python src/match.py --patient_id P001
+python src/match.py --patient_id 1
 ```
 
-## 📈 Performance & Optimizations
+## Performance & Optimizations
 
 ### Speed Metrics
 - **Deterministic Filtering**: <100ms per 100 trials
@@ -312,20 +310,20 @@ python src/match.py --patient_id P001
 - **24-hour caching** for trial and score data
 - **Smart batching** when processing multiple patients
 
-## 🏆 Technical Achievements
+## Technical Implementation
 
-### Architecture Highlights
-- **Hybrid Design**: Combines deterministic rules with AI for safety and quality
+### Architecture
+- **Hybrid Design**: I combined deterministic rules with AI for safety and quality
 - **Mixture-of-Experts**: Multiple specialized LLM perspectives consolidated by judge
 - **Structured Validation**: Pydantic models ensure contract compliance
 - **Smart Normalization**: Handles real-world data variations gracefully
 
-### Production-Ready Features
-- ✅ Comprehensive error handling with fallbacks
-- ✅ Detailed logging and transparency
-- ✅ Multiple output formats (text/JSON/detailed)
-- ✅ Configurable verbosity and expert modes
-- ✅ API key management with multiple providers
+### Production Features
+- Comprehensive error handling with fallbacks
+- Detailed logging and transparency
+- Multiple output formats (text/JSON/detailed)
+- Configurable verbosity and expert modes
+- API key management with multiple providers
 
 ### Evaluation Capabilities
 - LLM-as-judge for synthetic ground truth
@@ -333,35 +331,24 @@ python src/match.py --patient_id P001
 - Clinical logic verification
 - Performance metrics tracking
 
-## 🔮 Future Enhancements
+## Future Enhancements
 
-- [ ] Real-time trial status updates via webhooks
-- [ ] Integration with variant databases (ClinVar, COSMIC)
-- [ ] FHIR/HL7 support for EHR integration
-- [ ] React/Next.js web interface
-- [ ] Multi-language support (Spanish, Mandarin)
-- [ ] Batch processing API for multiple patients
-- [ ] Fine-tuned models for specific cancer types
+Potential improvements I would consider:
+- Real-time trial status updates via webhooks
+- Integration with variant databases (ClinVar, COSMIC)
+- FHIR/HL7 support for EHR integration
+- React/Next.js web interface
+- Multi-language support (Spanish, Mandarin)
+- Batch processing API for multiple patients
+- Fine-tuned models for specific cancer types
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Submit a pull request
-
-## 📄 License
+## License
 
 This project is part of a technical assessment for Radical Health.
 
-## 📞 Support
+## Support
 
 For questions or issues:
 - Check the troubleshooting section above
-- Review the implementation plan in `implementation_plan.md`
-- Examine test files for usage examples
-
----
-
-**Built with ❤️ for better clinical trial matching**
+- Review test files for usage examples
+- Examine source code for implementation details
