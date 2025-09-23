@@ -9,11 +9,11 @@ import asyncio
 import json
 import logging
 import os
-from dataclasses import dataclass, asdict
-from typing import List, Dict, Any, Optional, Tuple
+from dataclasses import dataclass
+from typing import List, Dict, Any, Optional
 from enum import Enum
-import hashlib
-from datetime import datetime, timedelta
+import time
+import random
 
 import pandas as pd
 
@@ -99,39 +99,73 @@ class LLMClient:
             self.client = None
     
     async def generate(self, prompt: str, system_prompt: str = None, temperature: float = 0.7) -> str:
-        """Generate response from LLM."""
-        if self.provider == LLMProvider.OPENAI and OPENAI_AVAILABLE:
-            messages = []
-            if system_prompt:
-                messages.append({"role": "system", "content": system_prompt})
-            messages.append({"role": "user", "content": prompt})
-            
-            response = await self.client.chat.completions.create(
-                model="gpt-5",
-                messages=messages,
-                temperature=temperature,
-                response_format={"type": "json_object"}
-            )
-            return response.choices[0].message.content
-            
-        elif self.provider == LLMProvider.GEMINI and GEMINI_AVAILABLE:
-            full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
-            response = self.client.generate_content(
-                full_prompt,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=temperature,
-                    response_mime_type="application/json"
-                )
-            )
-            return response.text
-        else:
-            # Mock response for testing
-            return json.dumps({
-                "score": 75.0,
-                "reasoning": "Mock scoring for testing",
-                "confidence": 0.8,
-                "key_points": ["Test match"]
-            })
+        """Generate response from LLM with exponential backoff for rate limiting."""
+        max_retries = 5
+        base_delay = 1.0  # Start with 1 second
+        
+        for attempt in range(max_retries):
+            try:
+                if self.provider == LLMProvider.OPENAI and OPENAI_AVAILABLE:
+                    messages = []
+                    if system_prompt:
+                        messages.append({"role": "system", "content": system_prompt})
+                    messages.append({"role": "user", "content": prompt})
+                    
+                    response = await self.client.chat.completions.create(
+                        model="gpt-5",
+                        messages=messages,
+                        temperature=temperature,
+                        response_format={"type": "json_object"}
+                    )
+                    return response.choices[0].message.content
+                    
+                elif self.provider == LLMProvider.GEMINI and GEMINI_AVAILABLE:
+                    full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+                    response = await asyncio.to_thread(
+                        self.client.generate_content,
+                        full_prompt,
+                        generation_config=genai.types.GenerationConfig(
+                            temperature=temperature,
+                            response_mime_type="application/json"
+                        )
+                    )
+                    return response.text
+                else:
+                    # Mock response for testing
+                    return json.dumps({
+                        "score": 75.0,
+                        "reasoning": "Mock scoring for testing",
+                        "confidence": 0.8,
+                        "key_points": ["Test match"]
+                    })
+                    
+            except Exception as e:
+                # Check if it's a rate limit error
+                is_rate_limit = False
+                if hasattr(e, 'status_code') and e.status_code == 429:
+                    is_rate_limit = True
+                elif 'rate' in str(e).lower() or '429' in str(e):
+                    is_rate_limit = True
+                
+                if is_rate_limit and attempt < max_retries - 1:
+                    # Exponential backoff with jitter
+                    delay = base_delay * (2 ** attempt) + random.uniform(0, 1)
+                    logger.warning(f"Rate limited, retrying in {delay:.1f}s (attempt {attempt + 1}/{max_retries})")
+                    await asyncio.sleep(delay)
+                elif attempt == max_retries - 1:
+                    logger.error(f"Max retries reached for LLM call: {e}")
+                    # Return a default response instead of failing
+                    return json.dumps({
+                        "score": 50.0,
+                        "reasoning": "Error in LLM evaluation - using default score",
+                        "confidence": 0.1,
+                        "key_points": ["Error occurred"]
+                    })
+                else:
+                    # Non-rate limit error, retry with smaller delay
+                    delay = 0.5 * (attempt + 1)
+                    logger.warning(f"LLM error: {e}, retrying in {delay}s")
+                    await asyncio.sleep(delay)
 
 
 class ExpertPrompts:
@@ -331,15 +365,18 @@ class HybridTrialRanker:
             ("Patient Advocate", ExpertPrompts.patient_advocate())
         ]
         
-        # Run expert evaluations in parallel
-        tasks = []
-        for expert_name, system_prompt in expert_configs:
-            task = self._get_single_expert_score(
+        # Run expert evaluations sequentially with delays to avoid rate limits
+        expert_scores = []
+        for i, (expert_name, system_prompt) in enumerate(expert_configs):
+            if i > 0:
+                # Small delay between expert calls to avoid rate limits
+                await asyncio.sleep(0.5)
+            
+            score = await self._get_single_expert_score(
                 patient, trial, expert_name, system_prompt
             )
-            tasks.append(task)
+            expert_scores.append(score)
         
-        expert_scores = await asyncio.gather(*tasks)
         return expert_scores
     
     async def _get_single_expert_score(

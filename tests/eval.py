@@ -4,15 +4,14 @@ Minimal evaluation suite - simple, clever, no human labels needed.
 """
 
 import asyncio
-import json
 import sys
 from pathlib import Path
 import logging
 import pandas as pd
 from dotenv import load_dotenv
 from dataclasses import dataclass
-from typing import List, Dict, Optional
 import time
+from argparse import ArgumentParser
 
 # Load environment variables from .env file
 load_dotenv()
@@ -25,12 +24,14 @@ from tests.behavioral_tests import BehavioralTests
 from tests.metrics_calculator import MinimalMetrics
 from tests.report_generator import MinimalReporter
 
+from src.match import HybridClinicalTrialMatcher
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 def create_mock_trials(patient: dict):
-    """Create mock trials for testing when real trials aren't available."""
+    """Create mock trials for testing."""
     
     @dataclass
     class MockTrial:
@@ -115,7 +116,9 @@ def create_mock_trials(patient: dict):
 
 async def main():
     """Run the minimal evaluation suite."""
-    from src.match import HybridClinicalTrialMatcher
+    arg_parser = ArgumentParser()
+    arg_parser.add_argument("--test_mode", action="store_true", required=False)
+    args = arg_parser.parse_args()
     
     start_time = time.time()
     logger.info("Starting evaluation...")
@@ -141,9 +144,12 @@ async def main():
     
     # Test ALL patients
     num_patients = len(patients_df)  # Test all 30 patients
-    
+
+    if args.test_mode:
+        num_patients = min(10, num_patients)
+
     # Process patients in parallel batches
-    BATCH_SIZE = 10  # Process 10 patients at a time
+    BATCH_SIZE = 5  # More parallelism hits LLM rate limits
     
     async def evaluate_patient(patient_id):
         """Evaluate a single patient asynchronously."""
@@ -215,6 +221,10 @@ async def main():
         batch_results = await asyncio.gather(*batch_tasks)
         
         all_results.extend(batch_results)
+        
+        # Small delay between batches to avoid rate limits
+        if batch_end < num_patients:
+            await asyncio.sleep(1.0)
     
     # Calculate metrics
     final_metrics = metrics.calculate_all(all_results[0] if all_results else {}, all_results)
@@ -227,8 +237,10 @@ async def main():
     print("\n" + "="*60)
     print(report)
     print("="*60)
+    
     print(f"\n⏱️  Evaluation completed in {elapsed_time:.1f} seconds")
     print(f"   ({elapsed_time/num_patients:.1f} seconds per patient average)")
+    print(f"   Total patients evaluated: {num_patients}")
     
     return final_metrics
 

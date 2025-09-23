@@ -57,11 +57,9 @@ pip install -r requirements.txt
 export NCI_API_KEY="your-nci-api-key"
 
 # For LLM ranking (at least one required)
-export OPENAI_API_KEY="your-openai-api-key"    # GPT-5
-export GEMINI_API_KEY="your-gemini-api-key"    # Gemini 2.5
-
-# Optional: Use specific environment variable names if different
-export OPEN_AI_SECRET_KEY="your-key"  # Alternative OpenAI env var
+export OPENAI_API_KEY="your-openai-api-key"
+export GEMINI_API_KEY="your-gemini-api-key"
+export CLAUDE_API_KEY="your-claude-api-key"
 ```
 
 **Note:** System uses mock data when API keys are not configured. With keys, you get real trials and LLM ranking.
